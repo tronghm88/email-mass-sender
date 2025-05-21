@@ -1,0 +1,22 @@
+{
+  "name": "email-mass-sender",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "shared/*"
+  ],
+  "scripts": {
+    "start:api": "cd packages/api-service && npm run start:dev",
+    "start:web": "cd packages/web-app && npm start",
+    "start:worker": "cd packages/worker-service && npm run start:dev",
+    "start": "concurrently \"npm run start:api\" \"npm run start:web\" \"npm run start:worker\"",
+    "build:api": "cd packages/api-service && npm run build",
+    "build:web": "cd packages/web-app && npm run build",
+    "build:worker": "cd packages/worker-service && npm run build",
+    "build": "npm run build:api && npm run build:web && npm run build:worker"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
