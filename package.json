@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "start:api": "cd packages/api-service && npm run start:dev",
-    "start:web": "cd packages/web-app && npm start",
+    "start:web": "cd packages/web-app && npm run start:web",
     "start:worker": "cd packages/worker-service && npm run start:dev",
     "start": "concurrently \"npm run start:api\" \"npm run start:web\" \"npm run start:worker\"",
     "build:api": "cd packages/api-service && npm run build",
@@ -18,5 +18,8 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.0"
+  },
+  "dependencies": {
+    "axios": "^1.9.0"
   }
 }
