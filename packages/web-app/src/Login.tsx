@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
-import axios from 'axios';
+import { useLogin } from 'react-admin';
 import './Login.css';
-import { useUser } from './UserContext';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
@@ -16,26 +15,26 @@ const LoginButton: React.FC = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
-  const { setUser } = useUser();
+  const authLogin = useLogin();
 
-  const login = useGoogleLogin({
+  const googleLogin = useGoogleLogin({
     flow: 'auth-code',
     onSuccess: async (codeResponse: GoogleAuthResponse) => {
       try {
         setIsLoading(true);
         setError('');
+        authLogin(codeResponse.code)
+        // // Gửi authentication code đến backend
+        // const response = await axios.post(`${API_BASE_URL}/auth/verify-google-token`, {
+        //   token: codeResponse.code
+        // });
         
-        // Gửi authentication code đến backend
-        const response = await axios.post(`${API_BASE_URL}/auth/verify-google-token`, {
-          token: codeResponse.code
-        });
+        // // Lưu thông tin đăng nhập vào localStorage
+        // localStorage.setItem('token', response.data.token);
+        // setUser(response.data.user);
         
-        // Lưu thông tin đăng nhập vào localStorage
-        localStorage.setItem('token', response.data.token);
-        setUser(response.data.user);
-        
-        // Chuyển hướng đến trang chính
-        navigate('/');
+        // // Chuyển hướng đến trang chính
+        // navigate('/');
       } catch (err) {
         console.error('Login failed:', err);
         setError('Đăng nhập thất bại. Vui lòng thử lại.');
@@ -55,7 +54,7 @@ const LoginButton: React.FC = () => {
       
       <button 
         className="google-login-button" 
-        onClick={() => login()}
+        onClick={() => googleLogin()}
         disabled={isLoading}
       >
         {isLoading ? (
