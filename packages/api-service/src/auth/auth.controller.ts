@@ -75,11 +75,11 @@ export class AuthController {
       const userData = await this.authService.verifyGoogleToken(body.token);
       const token = this.authService.createToken(userData);
 
-      // Trả về thông tin user và token
+      // Trả về thông tin user, token và role
       return { user: userData, token };
     } catch (error) {
       console.error('Token verification failed:', error);
-      throw new UnauthorizedException('Invalid Google token');
+      throw new UnauthorizedException(error.message);
     }
   }
 }

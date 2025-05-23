@@ -23,7 +23,18 @@ const LoginButton: React.FC = () => {
       try {
         setIsLoading(true);
         setError('');
-        authLogin(codeResponse.code)
+        authLogin(codeResponse.code).catch((err) => {
+          console.log(err);
+          // err có thể là object của react-admin hoặc axios, kiểm tra kỹ
+          if (typeof err === 'string') {
+            setError(err); // Hiển thị đúng message từ backend
+          } else if (err && err.message) {
+            setError(err.message);
+          } else {
+            setError('Đăng nhập thất bại. Vui lòng thử lại.');
+          }
+        })
+        .finally(() => setIsLoading(false));
         // // Gửi authentication code đến backend
         // const response = await axios.post(`${API_BASE_URL}/auth/verify-google-token`, {
         //   token: codeResponse.code

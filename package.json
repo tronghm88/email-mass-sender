@@ -14,7 +14,8 @@
     "build:api": "cd packages/api-service && npm run build",
     "build:web": "cd packages/web-app && npm run build",
     "build:worker": "cd packages/worker-service && npm run build",
-    "build": "npm run build:api && npm run build:web && npm run build:worker"
+    "build": "npm run build:api && npm run build:web && npm run build:worker",
+    "typeorm": "typeorm-ts-node-commonjs"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"
