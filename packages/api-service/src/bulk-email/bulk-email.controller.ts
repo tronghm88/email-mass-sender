@@ -1,5 +1,5 @@
 import { Controller, Post, Body, UseGuards, Req } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bull';
+import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bull';
 import { BulkEmailDto } from './bulk-email.dto';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
