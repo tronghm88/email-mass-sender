@@ -1,38 +1,33 @@
-# Email Mass Sender - Setup Guide
+# Email Mass Sender - Hướng dẫn triển khai
 
-## Prerequisites
+## Yêu cầu hệ thống
 
-Before starting, ensure you have the following installed on your system:
+Trước khi bắt đầu, đảm bảo máy chủ của bạn đã cài đặt:
 
-- Node.js (v16 or later)
-- Docker and Docker Compose
+- Docker và Docker Compose (phiên bản mới nhất)
 - Git
+- Ít nhất 2GB RAM và 1 CPU core
+- Hệ điều hành: Ubuntu 20.04 hoặc mới hơn
 
 ## Initial Setup
 
-### 1. Clone the Repository
+### 1. Clone Repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/tronghm88/email-mass-sender.git
 cd email-mass-sender
 ```
 
-### 2. Install Dependencies
+### 2. Cấu hình môi trường
 
-```bash
-npm install
-```
-
-### 3. Set Up Environment Variables
-
-Create a `.env` file in the root directory with the following variables:
+Tạo file `.env` trong thư mục gốc với các biến môi trường sau:
 
 ```
 # Database
 DB_HOST=postgres
 DB_PORT=5432
 DB_USERNAME=postgres
-DB_PASSWORD=your_password
+DB_PASSWORD=your_secure_password
 DB_DATABASE=email_sender
 
 # Redis
@@ -40,164 +35,199 @@ REDIS_HOST=redis
 REDIS_PORT=6379
 
 # JWT
-JWT_SECRET=your_jwt_secret
-JWT_EXPIRATION=1d
+JWT_SECRET=your_secure_jwt_secret
 
 # Google OAuth
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
-GOOGLE_CALLBACK_URL=http://localhost:3000/api/auth/google/callback
+GOOGLE_CALLBACK_URL=https://your-domain.com/api/auth/google/callback
 
-# Encryption
-ENCRYPTION_KEY=your_encryption_key
-
-# App
-API_PORT=3000
-WEB_PORT=4200
-WORKER_CONCURRENCY=5
+# Admin Email (email này sẽ được cấp quyền admin)
+ADMIN_EMAIL=your_admin_email@gmail.com
 ```
 
-### 4. Google API Setup
+**Lưu ý:** Thay `your-domain.com` bằng tên miền thực tế của bạn.
 
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project
-3. Navigate to "APIs & Services" > "Credentials"
-4. Create an OAuth 2.0 Client ID
-5. Configure the consent screen with the following scopes:
+### 3. Cấu hình Google API
+
+1. Truy cập [Google Cloud Console](https://console.cloud.google.com/)
+2. Tạo dự án mới
+3. Vào "APIs & Services" > "Credentials"
+4. Tạo OAuth 2.0 Client ID
+5. Cấu hình màn hình đồng ý với các quyền sau:
    - `https://www.googleapis.com/auth/gmail.send`
    - `https://www.googleapis.com/auth/userinfo.email`
    - `https://www.googleapis.com/auth/userinfo.profile`
-6. Add the callback URL: `http://localhost:3000/api/auth/google/callback`
-7. Copy the Client ID and Client Secret to your `.env` file
+6. Thêm URL callback: `https://your-domain.com/api/auth/google/callback`
+7. Thêm URL callback cho development: `http://localhost:3000/api/auth/google/callback`
+8. Sao chép Client ID và Client Secret vào file `.env`
 
-## Development Setup
+**Quan trọng:** Đảm bảo đã publish ứng dụng trong OAuth consent screen để người dùng có thể đăng nhập mà không gặp cảnh báo.
 
-### Start Development Environment
+## Triển khai lên server
+
+### 1. Cấu hình Nginx
+
+Tạo file cấu hình Nginx cho ứng dụng:
 
 ```bash
-# Start all services in development mode
-npm run dev
-
-# Or start individual services
-npm run dev:web
-npm run dev:api
-npm run dev:worker
+sudo nano /etc/nginx/sites-available/email-sender.conf
 ```
 
-### Database Migrations
+Thêm nội dung sau (thay thế your-domain.com bằng tên miền thực tế):
 
-```bash
-# Generate a new migration
-npm run migration:generate -- -n MigrationName
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
 
-# Run migrations
-npm run migration:run
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
 
-# Revert last migration
-npm run migration:revert
+    location /api {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
 ```
 
-## Docker Setup
-
-### Build and Run with Docker Compose
+Kích hoạt cấu hình:
 
 ```bash
-# Build all containers
+sudo ln -s /etc/nginx/sites-available/email-sender.conf /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+### 2. Cấu hình SSL với Certbot
+
+```bash
+sudo apt update
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d your-domain.com
+```
+
+### 3. Khởi chạy ứng dụng với Docker Compose
+
+```bash
+# Build tất cả container
 docker-compose build
 
-# Start all services
+# Khởi chạy tất cả service
 docker-compose up -d
 
-# View logs
+# Xem logs
 docker-compose logs -f
 
-# Stop all services
+# Dừng tất cả service
 docker-compose down
 ```
 
-## Testing
+### 4. Kiểm tra trạng thái các container
 
 ```bash
-# Run all tests
-npm run test
-
-# Run tests for a specific app
-npm run test:web
-npm run test:api
-npm run test:worker
-
-# Run e2e tests
-npm run test:e2e
+docker-compose ps
 ```
 
-## Production Deployment
+Đảm bảo tất cả container đều trong trạng thái "Up".
 
-### Build for Production
+## Bảo trì và quản lý
+
+### 1. Cập nhật ứng dụng
 
 ```bash
-# Build all apps
-npm run build
+# Pull code mới
+git pull
 
-# Build specific app
-npm run build:web
-npm run build:api
-npm run build:worker
+# Rebuild và restart các container
+docker-compose down
+docker-compose build
+docker-compose up -d
 ```
 
-### Deploy with PM2
+### 2. Sao lưu dữ liệu
 
 ```bash
-# Install PM2 globally
-npm install -g pm2
+# Sao lưu database
+docker exec email-sender-postgres pg_dump -U postgres email_sender > backup_$(date +%Y%m%d).sql
 
-# Start services with PM2
-pm2 start ecosystem.config.js
-
-# Monitor services
-pm2 monit
-
-# View logs
-pm2 logs
+# Sao lưu file .env
+cp .env .env.backup_$(date +%Y%m%d)
 ```
 
-## Troubleshooting
+### 3. Khôi phục dữ liệu
 
-### Common Issues
+```bash
+# Khôi phục database
+cat backup_file.sql | docker exec -i email-sender-postgres psql -U postgres email_sender
+```
 
-1. **Database Connection Issues**
-   - Check if PostgreSQL is running: `docker-compose ps`
-   - Verify database credentials in `.env`
-   - Ensure migrations have been run
+## Xử lý sự cố
 
-2. **Redis Connection Issues**
-   - Check if Redis is running: `docker-compose ps`
-   - Verify Redis connection settings in `.env`
+### Các vấn đề thường gặp
 
-3. **OAuth Authentication Failures**
-   - Verify Google API credentials
-   - Check that redirect URIs are correctly configured
-   - Ensure required scopes are enabled in Google Cloud Console
+1. **Lỗi kết nối Database**
+   - Kiểm tra PostgreSQL có đang chạy không: `docker-compose ps`
+   - Xác minh thông tin đăng nhập database trong `.env`
+   - Đảm bảo migrations đã được chạy
 
-4. **Worker Not Processing Jobs**
-   - Check Redis connection
-   - Verify Bull queue configuration
-   - Check logs for errors: `docker-compose logs worker-service`
+2. **Lỗi kết nối Redis**
+   - Kiểm tra Redis có đang chạy không: `docker-compose ps`
+   - Xác minh cài đặt kết nối Redis trong `.env`
 
-### Logs
+3. **Lỗi xác thực OAuth**
+   - Kiểm tra lại thông tin Google API credentials
+   - Đảm bảo redirect URIs được cấu hình chính xác
+   - Đảm bảo các scopes cần thiết đã được bật trong Google Cloud Console
 
-Logs are stored in the following locations:
+4. **Worker không xử lý jobs**
+   - Kiểm tra kết nối Redis
+   - Xem logs để tìm lỗi: `docker-compose logs worker-service`
+   - Kiểm tra cấu hình queue trong BullMQ
 
-- API Service: `logs/api-service.log`
-- Worker Service: `logs/worker-service.log`
-- Web App: `logs/web-app.log`
+### Kiểm tra logs
 
-Log rotation is configured to keep files manageable.
+```bash
+# Xem logs của tất cả services
+docker-compose logs
 
-## Monitoring
+# Xem logs của service cụ thể
+docker-compose logs api-service
+docker-compose logs worker-service
+docker-compose logs web-app
 
-Access the monitoring dashboard at `http://localhost:3000/status` to view:
+# Theo dõi logs realtime
+docker-compose logs -f worker-service
+```
 
-- Service health
-- Queue statistics
+## Tối ưu hóa hiệu suất
+
+1. **Tăng số lượng worker**
+   - Chỉnh sửa cấu hình trong worker-service để tăng số lượng worker xử lý song song
+
+2. **Giám sát tài nguyên**
+   - Sử dụng `docker stats` để theo dõi mức sử dụng CPU/RAM
+   - Nâng cấp tài nguyên server nếu cần thiết
+
+3. **Tối ưu database**
+   - Thêm indexes cho các truy vấn thường xuyên
+   - Cấu hình PostgreSQL cho hiệu suất tốt hơn
+
+## Liên hệ hỗ trợ
+
+Nếu bạn gặp vấn đề không thể tự giải quyết, vui lòng liên hệ:
+
+- Email: support@email-mass-sender.com
+- Telegram: @email_mass_sender_support
 - Email sending metrics
 - System resource usage

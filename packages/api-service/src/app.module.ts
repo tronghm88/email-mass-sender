@@ -7,7 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import googleConfig from './config/google.config';
 import { SenderModule } from './senders/sender.module';
 import { UsersModule } from './users/users.module';
-import { BulkEmailModule } from './bulk-email/builk-email.module';
+import { BulkEmailModule } from './bulk-email/bulk-email.module';
 
 @Module({
   imports: [
