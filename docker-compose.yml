@@ -27,27 +27,22 @@ services:
     build:
       context: .
       dockerfile: docker/api/Dockerfile
+    env_file:
+      - ./packages/api-service/.env
     container_name: email-sender-api
     depends_on:
       - postgres
       - redis
     ports:
       - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USERNAME=postgres
-      - DB_PASSWORD=postgres
-      - DB_DATABASE=email_sender
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
     restart: unless-stopped
 
   web-app:
     build:
       context: .
       dockerfile: docker/web/Dockerfile
+    env_file:
+      - ./packages/web-app/.env
     container_name: email-sender-web
     ports:
       - "3001:80"
@@ -57,19 +52,12 @@ services:
     build:
       context: .
       dockerfile: docker/worker/Dockerfile
+    env_file:
+      - ./packages/worker-service/.env
     container_name: email-sender-worker
     depends_on:
       - postgres
       - redis
-    environment:
-      - NODE_ENV=production
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USERNAME=postgres
-      - DB_PASSWORD=postgres
-      - DB_DATABASE=email_sender
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
     restart: unless-stopped
 
 volumes:
