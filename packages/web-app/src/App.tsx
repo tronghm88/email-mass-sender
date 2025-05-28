@@ -8,6 +8,7 @@ import { dataProvider } from './dataProvider';
 import Login from './Login';
 import { Route } from 'react-router-dom';
 import { MyLayout } from './MyLayout';
+import LogList from './pages/LogList';
 
 function App() {
 
@@ -38,17 +39,23 @@ function App() {
             <Route
                 path="/bulk-email"
                 element={
-                  <ProtectedRoute allowedRoles={['admin']}>
+                  <ProtectedRoute allowedRoles={['admin', 'user']}>
                     <BulkEmail />
                   </ProtectedRoute>
                 }
             />
+            <Route
+                path="/log-mail"
+                element={
+                  <ProtectedRoute allowedRoles={['admin', 'user']}>
+                    <LogList />
+                  </ProtectedRoute>
+                }
+            />
         </CustomRoutes>
-
-      <Resource name="emails" list={() => <div>Màn hình gửi email</div>} />
-      <Resource name="senderEmails" list={() => <div>Quản lý sender email</div>} />
     </Admin>
   );
 }
+
 
 export default App;

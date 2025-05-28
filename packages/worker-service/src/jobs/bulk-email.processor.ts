@@ -1,4 +1,6 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Inject } from '@nestjs/common';
+import { Redis } from 'ioredis';
 import { Job, Queue } from 'bullmq';
 import { InjectQueue } from '@nestjs/bullmq';
 import { BulkEmailService } from './bulk-email.service';
@@ -12,6 +14,7 @@ export class BulkEmailProcessor extends WorkerHost {
     private readonly senderService: SenderService,
     private readonly logger: BulkEmailLogger,
     @InjectQueue('bulkEmail') private readonly bulkEmailQueue: Queue,
+    @Inject('REDIS_CLIENT') private readonly redis: Redis,
   ) {
     super();
   }
@@ -61,6 +64,21 @@ export class BulkEmailProcessor extends WorkerHost {
           batchIndex,
           jobId: job.id,
         });
+
+        // Save job done log to Redis (TypeScript logic, no Lua)
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+        const jobDoneKey = `job_done:${dateStr}`;
+        const logData = JSON.stringify({
+          sender,
+          recipient: email,
+          timestamp: now.toISOString(),
+        });
+        await this.redis.lpush(jobDoneKey, logData);
+        const ttl = await this.redis.ttl(jobDoneKey);
+        if (ttl < 0) {
+          await this.redis.expire(jobDoneKey, 864000); // 10 days
+        }
       } catch (err) {
         console.log(err);
         if (this.bulkEmailService.isTokenExpiredError(err)) {

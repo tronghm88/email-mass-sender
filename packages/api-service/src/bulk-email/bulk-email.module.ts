@@ -1,6 +1,7 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { BulkEmailController } from './bulk-email.controller';
+import { RedisProvider } from '../redis.provider';
 
 @Module({
   imports: [
@@ -14,5 +15,7 @@ import { BulkEmailController } from './bulk-email.controller';
     }),
   ],
   controllers: [BulkEmailController],
+  providers: [RedisProvider],
+  exports: [RedisProvider],
 })
 export class BulkEmailModule {}

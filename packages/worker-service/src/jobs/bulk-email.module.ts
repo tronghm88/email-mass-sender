@@ -6,6 +6,7 @@ import { SenderService } from '../jobs/sender.service';
 import { BulkEmailLogger } from '../common/bulk-email.logger';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SenderEmail } from './sender-email.entity';
+import { RedisProvider } from '../redis.provider';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { SenderEmail } from './sender-email.entity';
     BulkEmailProcessor,
     BulkEmailService,
     SenderService,
+    RedisProvider,
     {
       provide: BulkEmailLogger,
       useClass: BulkEmailLogger,

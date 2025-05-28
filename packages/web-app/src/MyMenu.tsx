@@ -28,6 +28,11 @@ export const MyMenu = () => {
                     leftIcon={<EmailIcon />}
                 />
             )}
+            <Menu.Item
+                to="/log-mail"
+                primaryText="Log gửi mail"
+                leftIcon={<MarkEmailReadIcon />}
+            />
         </Menu>
     );
 };
