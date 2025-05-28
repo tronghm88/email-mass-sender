@@ -17,6 +17,7 @@
     "@types/react": "^19.1.4",
     "@types/react-dom": "^19.1.5",
     "axios": "^1.9.0",
+    "dayjs": "^1.11.13",
     "postcss": "^8.5.3",
     "ra-data-simple-rest": "^5.8.2",
     "react": "^19.1.0",
