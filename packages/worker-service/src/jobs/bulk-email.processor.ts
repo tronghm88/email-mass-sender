@@ -83,10 +83,8 @@ export class BulkEmailProcessor extends WorkerHost {
         console.log(err);
         if (this.bulkEmailService.isTokenExpiredError(err)) {
           try {
-            const newToken = await this.bulkEmailService.refreshAccessToken(
-              refreshToken,
-              senderAuth,
-            );
+            const newToken =
+              await this.bulkEmailService.refreshAccessToken(refreshToken);
             await this.senderService.updateSenderAccessToken(sender, newToken);
             await this.bulkEmailService.sendMailViaGmailAPI({
               refreshToken,

@@ -56,14 +56,11 @@ export class BulkEmailService {
     );
   }
 
-  async refreshAccessToken(
-    refreshToken: string,
-    senderAuth: any,
-  ): Promise<string> {
+  async refreshAccessToken(refreshToken: string): Promise<string> {
     const url = 'https://oauth2.googleapis.com/token';
     const params = {
-      client_id: senderAuth.clientId,
-      client_secret: senderAuth.clientSecret,
+      client_id: this.configService.get<string>('google.clientId'),
+      client_secret: this.configService.get<string>('google.clientSecret'),
       refresh_token: refreshToken,
       grant_type: 'refresh_token',
     };
