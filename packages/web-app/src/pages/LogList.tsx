@@ -156,7 +156,14 @@ export default function LogList() {
               <TableRow key={idx}>
                 <TableCell>{log.recipient}</TableCell>
                 <TableCell>{log.sender}</TableCell>
-                <TableCell>{dayjs(log.timestamp).format('DD/MM/YYYY HH:mm:ss')}</TableCell>
+                <TableCell>
+                  {dayjs(log.timestamp).format('DD/MM/YYYY HH:mm:ss')}
+                  {log.error && (
+                    <Typography variant="body2" color="error" sx={{ mt: 0.5 }}>
+                      {log.error}
+                    </Typography>
+                  )}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

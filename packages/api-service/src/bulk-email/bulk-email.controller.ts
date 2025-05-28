@@ -23,7 +23,9 @@ export class BulkEmailController {
 
     // Get today's date string in yyyymmdd format
     const now = new Date();
-    const todayString = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    const bangkok = new Date(utc + 7 * 60 * 60 * 1000);
+    const todayString = `${bangkok.getFullYear()}${String(bangkok.getMonth() + 1).padStart(2, '0')}${String(bangkok.getDate()).padStart(2, '0')}`;
     const jobCountKey = `job_count:${todayString}`;
     // Increment job count by number of recipients and only set expiry if not set
     await this.redis.incrby(jobCountKey, recipients.length);

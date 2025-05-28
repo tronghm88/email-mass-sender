@@ -48,6 +48,13 @@ export class BulkEmailProcessor extends WorkerHost {
     const accessToken = senderAuth.accessToken;
     const refreshToken = senderAuth.refreshToken;
 
+    // Save job done log to Redis (TypeScript logic, no Lua)
+    const now = new Date();
+    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    const bangkok = new Date(utc + 7 * 60 * 60 * 1000);
+    const dateStr = `${bangkok.getFullYear()}${String(bangkok.getMonth() + 1).padStart(2, '0')}${String(bangkok.getDate()).padStart(2, '0')}`;
+    const jobDoneKey = `job_done:${dateStr}`;
+
     for (const email of recipients) {
       try {
         await this.bulkEmailService.sendMailViaGmailAPI({
@@ -65,14 +72,11 @@ export class BulkEmailProcessor extends WorkerHost {
           jobId: job.id,
         });
 
-        // Save job done log to Redis (TypeScript logic, no Lua)
-        const now = new Date();
-        const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-        const jobDoneKey = `job_done:${dateStr}`;
         const logData = JSON.stringify({
           sender,
           recipient: email,
           timestamp: now.toISOString(),
+          error: '',
         });
         await this.redis.lpush(jobDoneKey, logData);
         const ttl = await this.redis.ttl(jobDoneKey);
@@ -147,8 +151,16 @@ export class BulkEmailProcessor extends WorkerHost {
         },
       );
     } else if (failedRecipients.length > 0 && retryCount >= maxRetry) {
-      // Log các email lỗi vĩnh viễn
-      console.log('exceeded max retry');
+      for (const email of failedRecipients) {
+        const logData = JSON.stringify({
+          sender,
+          recipient: email,
+          timestamp: now.toISOString(),
+          error: `Exceeded max retry (${maxRetry})`,
+        });
+        await this.redis.lpush(jobDoneKey, logData);
+      }
+      // Optional: vẫn logFail tổng hợp cho debug
       this.logger.logFail({
         sender,
         recipient: failedRecipients.join(','),
