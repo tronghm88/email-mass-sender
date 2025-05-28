@@ -6,21 +6,21 @@ import { UsersService } from './users.service';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @UseGuards(JwtAuthGuard)
+  // @UseGuards(JwtAuthGuard)
   @Get()
   async getAllUsers() {
     // Lấy tất cả user, chỉ trả về email và role
     return this.usersService.findAll();
   }
 
-  @UseGuards(JwtAuthGuard)
+  // @UseGuards(JwtAuthGuard)
   @Post()
   async addUser(@Body('email') email: string) {
     // Validate email
     return this.usersService.addUser(email);
   }
 
-  @UseGuards(JwtAuthGuard)
+  // @UseGuards(JwtAuthGuard)
   @Delete(':email')
   async deleteUser(@Param('email') email: string) {
     return this.usersService.deleteUser(email);

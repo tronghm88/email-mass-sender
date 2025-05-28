@@ -37,14 +37,14 @@ export class SenderEmailController {
     };
   }
 
-  @UseGuards(JwtAuthGuard)
+  // @UseGuards(JwtAuthGuard)`
   @Get()
   async getAllEmails() {
     const emails = await this.senderEmailService.findAllEmails();
     return emails;
   }
 
-  @UseGuards(JwtAuthGuard)
+  // @UseGuards(JwtAuthGuard)
   @Delete(':email')
   async deleteEmail(@Param('email') email: string) {
     await this.senderEmailService.deleteByEmail(email);
