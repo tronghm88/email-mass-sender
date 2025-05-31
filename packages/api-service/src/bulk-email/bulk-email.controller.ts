@@ -50,6 +50,7 @@ export class BulkEmailController {
       await this.bulkEmailQueue.add('send-bulk', jobData, {
         removeOnComplete: true,
         removeOnFail: false, // giữ lại job fail để debug
+        delay: 3000,
       });
     }
 

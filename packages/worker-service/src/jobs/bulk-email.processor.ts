@@ -83,6 +83,7 @@ export class BulkEmailProcessor extends WorkerHost {
         if (ttl < 0) {
           await this.redis.expire(jobDoneKey, 864000); // 10 days
         }
+        await this.sleep(2000);
       } catch (err) {
         console.log(err);
         if (this.bulkEmailService.isTokenExpiredError(err)) {
@@ -169,5 +170,9 @@ export class BulkEmailProcessor extends WorkerHost {
         error: `Exceeded max retry (${maxRetry})`,
       });
     }
+  }
+
+  private async sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
