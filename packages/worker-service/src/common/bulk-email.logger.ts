@@ -1,27 +1,30 @@
 import * as winston from 'winston';
 import * as path from 'path';
+import * as DailyRotateFile from 'winston-daily-rotate-file';
 
 export class BulkEmailLogger {
   private logger: winston.Logger;
 
   constructor() {
+    const logDir = path.join(__dirname, '../../logs');
+
+    const transport = new DailyRotateFile({
+      dirname: logDir,
+      filename: '%DATE%-bulk-email.log',
+      datePattern: 'YYYY-MM-DD',
+      zippedArchive: false,
+      maxSize: '20m',
+      maxFiles: '14d',
+      level: 'info',
+    });
+
     this.logger = winston.createLogger({
-      transports: [
-        new winston.transports.File({
-          filename: path.join(__dirname, '../../logs', `${this.getDateString()}-bulk-email.log`),
-          level: 'info',
-        }),
-      ],
       format: winston.format.combine(
         winston.format.timestamp(),
         winston.format.json()
       ),
+      transports: [transport],
     });
-  }
-
-  private getDateString() {
-    const d = new Date();
-    return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
   }
 
   logSuccess({ sender, recipient, batchIndex, jobId, refreshed = false }) {
@@ -32,7 +35,6 @@ export class BulkEmailLogger {
       batchIndex,
       jobId,
       refreshed,
-      timestamp: new Date().toISOString(),
     });
   }
 
@@ -44,7 +46,6 @@ export class BulkEmailLogger {
       batchIndex,
       jobId,
       error: error?.message || error,
-      timestamp: new Date().toISOString(),
     });
   }
 }
