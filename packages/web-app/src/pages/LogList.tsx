@@ -158,6 +158,11 @@ export default function LogList() {
                 <TableCell>{log.sender}</TableCell>
                 <TableCell>
                   {dayjs(log.timestamp).format('DD/MM/YYYY HH:mm:ss')}
+                  {log.success && (
+                    <Typography variant="body2" color="success" sx={{ mt: 0.5 }}>
+                      {log.success}
+                    </Typography>
+                  )}
                   {log.error && (
                     <Typography variant="body2" color="error" sx={{ mt: 0.5 }}>
                       {log.error}

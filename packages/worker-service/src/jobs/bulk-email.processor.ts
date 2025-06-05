@@ -20,6 +20,8 @@ export class BulkEmailProcessor extends WorkerHost {
   }
 
   async process(job: Job): Promise<any> {
+    console.log('Processing job:', job.id);
+    console.log(job.data);
     switch (job.name) {
       case 'send-bulk':
         return this.sendBulkEmail(job);
@@ -39,7 +41,7 @@ export class BulkEmailProcessor extends WorkerHost {
       batchIndex,
       retryCount = 0,
     } = job.data;
-    console.log(job.data);
+
     const failedRecipients: string[] = [];
     const maxRetry = 3;
 
@@ -72,17 +74,8 @@ export class BulkEmailProcessor extends WorkerHost {
           jobId: job.id,
         });
 
-        const logData = JSON.stringify({
-          sender,
-          recipient: email,
-          timestamp: now.toISOString(),
-          error: '',
-        });
-        await this.redis.lpush(jobDoneKey, logData);
-        const ttl = await this.redis.ttl(jobDoneKey);
-        if (ttl < 0) {
-          await this.redis.expire(jobDoneKey, 864000); // 10 days
-        }
+        console.log('success');
+        await this.saveSuccessLog(sender, email, jobDoneKey, now);
         await this.sleep(2000);
       } catch (err) {
         console.log(err);
@@ -99,7 +92,8 @@ export class BulkEmailProcessor extends WorkerHost {
               subject,
               body,
             });
-            console.log('success');
+            console.log('success after refresh token');
+            await this.saveSuccessLog(sender, email, jobDoneKey, now);
             this.logger.logSuccess({
               sender,
               recipient: email,
@@ -157,7 +151,7 @@ export class BulkEmailProcessor extends WorkerHost {
           sender,
           recipient: email,
           timestamp: now.toISOString(),
-          error: `Exceeded max retry (${maxRetry})`,
+          error: `Failed. Token expired or limit exceeded`,
         });
         await this.redis.lpush(jobDoneKey, logData);
       }
@@ -174,5 +168,25 @@ export class BulkEmailProcessor extends WorkerHost {
 
   private async sleep(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private async saveSuccessLog(
+    sender: string,
+    recipient: string,
+    jobDoneKey: string,
+    now: Date,
+  ) {
+    const logData = JSON.stringify({
+      sender,
+      recipient,
+      timestamp: now.toISOString(),
+      error: '',
+      success: 'Success',
+    });
+    await this.redis.lpush(jobDoneKey, logData);
+    const ttl = await this.redis.ttl(jobDoneKey);
+    if (ttl < 0) {
+      await this.redis.expire(jobDoneKey, 864000); // 10 days
+    }
   }
 }

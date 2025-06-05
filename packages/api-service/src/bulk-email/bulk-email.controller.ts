@@ -1,8 +1,15 @@
-import { Controller, Post, Body, UseGuards, Req, BadRequestException, NotFoundException, Get, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Req,
+  BadRequestException,
+  Get,
+  Query,
+} from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { BulkEmailDto } from './bulk-email.dto';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 
 import { Inject } from '@nestjs/common';
 import { Redis } from 'ioredis';
@@ -19,7 +26,7 @@ export class BulkEmailController {
   async sendBulkEmail(@Body() dto: BulkEmailDto, @Req() req) {
     const { sender, subject, body, recipients } = dto;
     const userId = req.user?.id;
-    const batchSize = 100;
+    const batchSize = 125;
 
     // Get today's date string in yyyymmdd format
     const now = new Date();
@@ -34,22 +41,39 @@ export class BulkEmailController {
       await this.redis.expire(jobCountKey, 864000); // 10 days
     }
 
-    for (let i = 0; i < recipients.length; i += batchSize) {
-      const batchRecipients = recipients.slice(i, i + batchSize);
+    const totalBatches = Math.ceil(recipients.length / batchSize);
+    const baseTime = new Date();
+
+    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+      const start = batchIndex * batchSize;
+      const batchRecipients = recipients.slice(start, start + batchSize);
+
+      // Calculate delay
+      // Each pair of batches is sent per day: first batch (no delay), second batch (+15m)
+      // 0: +0d, 1: +0d+15m, 2: +1d, 3: +1d+15m, 4: +2d, 5: +2d+15m, ...
+      const dayOffset = Math.floor(batchIndex / 2);
+      const isSecondBatchOfDay = batchIndex % 2 === 1;
+
+      let delayMs = dayOffset * 24 * 60 * 60 * 1000; // days in ms
+      if (isSecondBatchOfDay) {
+        delayMs += 15 * 60 * 1000; // add 15 minutes in ms
+      }
+
       const jobData = {
         sender,
         subject,
         body,
         recipients: batchRecipients,
         userId,
-        batchIndex: Math.floor(i / batchSize),
-        totalBatches: Math.ceil(recipients.length / batchSize),
+        batchIndex,
+        totalBatches,
         totalRecipients: recipients.length,
       };
 
       await this.bulkEmailQueue.add('send-bulk', jobData, {
         removeOnComplete: true,
         removeOnFail: false, // giữ lại job fail để debug
+        delay: delayMs, // delay in ms from now
       });
     }
 
