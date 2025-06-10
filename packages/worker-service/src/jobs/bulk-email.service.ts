@@ -1,27 +1,65 @@
 import { Injectable } from '@nestjs/common';
 import axios from 'axios';
-import { google } from 'googleapis';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
+import { OAuth2Client } from 'google-auth-library';
+import { google } from 'googleapis';
+
+interface GoogleRefreshResponse {
+  access_token: string;
+  expires_in: number;
+  scope: string;
+  token_type: string;
+  refresh_token?: string; // refresh_token là tùy chọn
+}
 
 @Injectable()
 export class BulkEmailService {
+  private oAuthClients: Map<string, OAuth2Client> = new Map(); // Cache oAuth2Client instances by senderId
+
   constructor(private readonly configService: ConfigService) {}
 
+  getOrCreateOAuth2Client(
+    senderEmail: string,
+    refreshToken: string,
+    accessToken: string,
+    accessTokenExpiryDate: number,
+  ): OAuth2Client {
+    let client = this.oAuthClients.get(senderEmail);
+
+    if (!client) {
+      client = new OAuth2Client(
+        this.configService.get<string>('google.clientId'),
+        this.configService.get<string>('google.clientSecret'),
+      );
+      this.oAuthClients.set(senderEmail, client);
+    }
+
+    // LUÔN LUÔN thiết lập credentials với access_token, refresh_token VÀ expiry_date
+    // Thư viện sẽ tự động làm mới access_token nếu nó hết hạn
+    client.setCredentials({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      expiry_date: accessTokenExpiryDate,
+    });
+
+    return client;
+}
+
   async sendMailViaGmailAPI({
-    sender,
+    senderEmail,
     recipient,
     subject,
     body,
     refreshToken,
     accessToken,
+    accessTokenExpiryDate,
   }) {
-    const oAuth2Client = new google.auth.OAuth2(
-      this.configService.get<string>('google.clientId'),
-      this.configService.get<string>('google.clientSecret'),
-      this.configService.get<string>('google.callbackURL'),
+    const oAuth2Client = this.getOrCreateOAuth2Client(
+      senderEmail,
+      refreshToken,
+      accessToken,
+      accessTokenExpiryDate,
     );
-    oAuth2Client.setCredentials({ refresh_token: refreshToken });
 
     const gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
 
@@ -40,7 +78,7 @@ export class BulkEmailService {
       .replace(/=+$/, ''); // Gmail API yêu cầu base64url không có padding
 
     const result = await gmail.users.messages.send({
-      userId: sender,
+      userId: 'me',
       requestBody: {
         raw: rawMessage,
       },
@@ -56,7 +94,11 @@ export class BulkEmailService {
     );
   }
 
-  async refreshAccessToken(refreshToken: string): Promise<string> {
+  async refreshAccessToken(refreshToken: string): Promise<{
+    newAccessToken: string;
+    newRefreshToken: string;
+    newExpiresAt: Date;
+  }> {
     const url = 'https://oauth2.googleapis.com/token';
     const params = {
       client_id: this.configService.get<string>('google.clientId'),
@@ -64,7 +106,32 @@ export class BulkEmailService {
       refresh_token: refreshToken,
       grant_type: 'refresh_token',
     };
-    const res = await axios.post(url, null, { params });
-    return res.data.access_token;
+    try {
+      const res = await axios.post<GoogleRefreshResponse>(url, null, {
+        params,
+      });
+
+      // Trả về cả access_token và refresh_token (nếu có)
+      return {
+        newAccessToken: res.data.access_token,
+        newRefreshToken: res.data.refresh_token || refreshToken, // Google sẽ gửi lại cái mới nếu muốn thay thế cái cũ
+        newExpiresAt: new Date(Date.now() + res.data.expires_in * 1000),
+      };
+    } catch (error) {
+      // Xử lý lỗi chi tiết hơn
+      if (axios.isAxiosError(error) && error.response) {
+        console.error('Error refreshing token:', error.response.data);
+        // Kiểm tra lỗi invalid_grant cụ thể
+        if (error.response.data.error === 'invalid_grant') {
+          // Ném một lỗi cụ thể để logic gọi biết refresh token đã chết
+          throw new Error(
+            'Refresh token is invalid or expired. User needs to re-authenticate.',
+          );
+        }
+      } else {
+        console.error('Unknown error during token refresh:', error);
+      }
+      throw error; // Ném lại lỗi để hàm gọi biết
+    }
   }
 }

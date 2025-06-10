@@ -11,6 +11,8 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { BulkEmailDto } from './bulk-email.dto';
 
+import { BulkEmailBatchService } from './bulk-email-batch.service';
+
 import { Inject } from '@nestjs/common';
 import { Redis } from 'ioredis';
 
@@ -19,7 +21,9 @@ export class BulkEmailController {
   constructor(
     @InjectQueue('bulkEmail') private readonly bulkEmailQueue: Queue,
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
+    private readonly bulkEmailBatchService: BulkEmailBatchService,
   ) {}
+
 
   @Post('send')
   // @UseGuards(JwtAuthGuard)
@@ -27,19 +31,6 @@ export class BulkEmailController {
     const { sender, subject, body, recipients } = dto;
     const userId = req.user?.id;
     const batchSize = 125;
-
-    // Get today's date string in yyyymmdd format
-    const now = new Date();
-    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-    const bangkok = new Date(utc + 7 * 60 * 60 * 1000);
-    const todayString = `${bangkok.getFullYear()}${String(bangkok.getMonth() + 1).padStart(2, '0')}${String(bangkok.getDate()).padStart(2, '0')}`;
-    const jobCountKey = `job_count:${todayString}`;
-    // Increment job count by number of recipients and only set expiry if not set
-    await this.redis.incrby(jobCountKey, recipients.length);
-    const ttl = await this.redis.ttl(jobCountKey);
-    if (ttl < 0) {
-      await this.redis.expire(jobCountKey, 864000); // 10 days
-    }
 
     const totalBatches = Math.ceil(recipients.length / batchSize);
     const baseTime = new Date();
@@ -69,6 +60,17 @@ export class BulkEmailController {
         totalBatches,
         totalRecipients: recipients.length,
       };
+
+      // Tính thời điểm chạy job (datetime)
+      const runAt = new Date(baseTime.getTime() + delayMs);
+
+      // Lưu thông tin batch vào database
+      await this.bulkEmailBatchService.createBatch({
+        sender_email: sender,
+        count: batchRecipients.length,
+        batchIndex,
+        datetime: runAt,
+      });
 
       await this.bulkEmailQueue.add('send-bulk', jobData, {
         removeOnComplete: true,

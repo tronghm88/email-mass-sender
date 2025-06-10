@@ -6,6 +6,8 @@ import { SenderService } from '../jobs/sender.service';
 import { BulkEmailLogger } from '../common/bulk-email.logger';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SenderEmail } from './sender-email.entity';
+import { EmailLog } from './email-log.entity';
+import { EmailLogService } from './email-log.service';
 import { RedisProvider } from '../redis.provider';
 
 @Module({
@@ -18,12 +20,13 @@ import { RedisProvider } from '../redis.provider';
         password: process.env.REDIS_PASSWORD || undefined,
       },
     }),
-    TypeOrmModule.forFeature([SenderEmail]),
+    TypeOrmModule.forFeature([SenderEmail, EmailLog]),
   ],
   providers: [
     BulkEmailProcessor,
     BulkEmailService,
     SenderService,
+    EmailLogService,
     RedisProvider,
     {
       provide: BulkEmailLogger,

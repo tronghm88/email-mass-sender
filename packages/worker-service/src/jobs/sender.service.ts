@@ -21,13 +21,23 @@ export class SenderService {
     return {
       accessToken: sender.accessToken,
       refreshToken: sender.refreshToken,
+      expiresAt: sender.expiresAt,
     };
   }
 
-  async updateSenderAccessToken(senderEmail: string, newAccessToken: string) {
+  async updateSenderAccessToken(
+    senderEmail: string,
+    newAccessToken: string,
+    newRefreshToken: string,
+    newExpiresAt: Date,
+  ) {
     await this.senderEmailRepo.update(
       { email: senderEmail },
-      { accessToken: newAccessToken },
+      {
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+        expiresAt: newExpiresAt,
+      },
     );
   }
 }

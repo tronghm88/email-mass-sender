@@ -6,6 +6,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { BulkEmailService } from './bulk-email.service';
 import { SenderService } from './sender.service';
 import { BulkEmailLogger } from '../common/bulk-email.logger';
+import { EmailLogService } from './email-log.service';
 
 @Processor('bulkEmail')
 export class BulkEmailProcessor extends WorkerHost {
@@ -13,6 +14,7 @@ export class BulkEmailProcessor extends WorkerHost {
     private readonly bulkEmailService: BulkEmailService,
     private readonly senderService: SenderService,
     private readonly logger: BulkEmailLogger,
+    private readonly emailLogService: EmailLogService,
     @InjectQueue('bulkEmail') private readonly bulkEmailQueue: Queue,
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
   ) {
@@ -32,161 +34,116 @@ export class BulkEmailProcessor extends WorkerHost {
   }
 
   async sendBulkEmail(job: Job): Promise<any> {
-    const {
-      sender,
-      subject,
-      body,
-      recipients,
-      userId,
-      batchIndex,
-      retryCount = 0,
-    } = job.data;
-
-    const failedRecipients: string[] = [];
-    const maxRetry = 3;
+    const { sender, subject, body, recipients, userId, batchIndex } = job.data;
 
     // Lấy token và refresh_token của sender từ database
     const senderAuth = await this.senderService.getSenderAuth(sender);
     const accessToken = senderAuth.accessToken;
     const refreshToken = senderAuth.refreshToken;
-
-    // Save job done log to Redis (TypeScript logic, no Lua)
-    const now = new Date();
-    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-    const bangkok = new Date(utc + 7 * 60 * 60 * 1000);
-    const dateStr = `${bangkok.getFullYear()}${String(bangkok.getMonth() + 1).padStart(2, '0')}${String(bangkok.getDate()).padStart(2, '0')}`;
-    const jobDoneKey = `job_done:${dateStr}`;
+    const accessTokenExpiryDate = senderAuth.expiresAt;
 
     for (const email of recipients) {
+      let sent = false;
       try {
         await this.bulkEmailService.sendMailViaGmailAPI({
           refreshToken,
           accessToken,
-          sender,
+          senderEmail: sender,
           recipient: email,
           subject,
           body,
+          accessTokenExpiryDate,
         });
+
+        await this.emailLogService.logSuccess({
+          sender,
+          recipient: email,
+          subject,
+        });
+
         this.logger.logSuccess({
           sender,
           recipient: email,
+          subject,
           batchIndex,
           jobId: job.id,
         });
-
-        console.log('success');
-        await this.saveSuccessLog(sender, email, jobDoneKey, now);
+        sent = true;
         await this.sleep(2000);
       } catch (err) {
-        console.log(err);
-        if (this.bulkEmailService.isTokenExpiredError(err)) {
+        // Nếu lỗi do token hết hạn, thử refresh 1 lần
+        if (!sent && this.bulkEmailService.isTokenExpiredError(err)) {
           try {
-            const newToken =
+            const { newAccessToken, newRefreshToken, newExpiresAt } =
               await this.bulkEmailService.refreshAccessToken(refreshToken);
-            await this.senderService.updateSenderAccessToken(sender, newToken);
-            await this.bulkEmailService.sendMailViaGmailAPI({
-              refreshToken,
-              accessToken: newToken,
+            await this.senderService.updateSenderAccessToken(
               sender,
+              newAccessToken,
+              newRefreshToken,
+              newExpiresAt,
+            );
+            await this.bulkEmailService.sendMailViaGmailAPI({
+              refreshToken: newRefreshToken,
+              accessToken: newAccessToken,
+              senderEmail: sender,
               recipient: email,
               subject,
               body,
+              accessTokenExpiryDate,
             });
-            console.log('success after refresh token');
-            await this.saveSuccessLog(sender, email, jobDoneKey, now);
+            await this.emailLogService.logSuccess({
+              sender,
+              recipient: email,
+              subject,
+            });
             this.logger.logSuccess({
               sender,
               recipient: email,
+              subject,
               batchIndex,
               jobId: job.id,
               refreshed: true,
             });
-            continue;
+            sent = true;
+            await this.sleep(2000);
           } catch (refreshErr) {
-            console.log(refreshErr);
-            console.log('fail');
+            await this.emailLogService.logFail({
+              sender,
+              recipient: email,
+              subject,
+              error: refreshErr?.message || String(refreshErr),
+            });
             this.logger.logFail({
               sender,
               recipient: email,
+              subject,
               batchIndex,
               jobId: job.id,
               error: refreshErr,
             });
-            failedRecipients.push(email);
           }
-        } else {
+        }
+        if (!sent) {
+          await this.emailLogService.logFail({
+            sender,
+            recipient: email,
+            subject,
+            error: err?.message || String(err),
+          });
           this.logger.logFail({
             sender,
             recipient: email,
+            subject,
             batchIndex,
             jobId: job.id,
             error: err,
           });
-          failedRecipients.push(email);
         }
       }
-    }
-
-    if (failedRecipients.length > 0 && retryCount < maxRetry) {
-      await this.bulkEmailQueue.add(
-        'send-bulk',
-        {
-          sender,
-          subject,
-          body,
-          recipients: failedRecipients,
-          userId,
-          batchIndex,
-          retryCount: retryCount + 1,
-        },
-        {
-          removeOnComplete: true,
-          removeOnFail: false,
-          attempts: 1,
-        },
-      );
-    } else if (failedRecipients.length > 0 && retryCount >= maxRetry) {
-      for (const email of failedRecipients) {
-        const logData = JSON.stringify({
-          sender,
-          recipient: email,
-          timestamp: now.toISOString(),
-          error: `Failed. Token expired or limit exceeded`,
-        });
-        await this.redis.lpush(jobDoneKey, logData);
-      }
-      // Optional: vẫn logFail tổng hợp cho debug
-      this.logger.logFail({
-        sender,
-        recipient: failedRecipients.join(','),
-        batchIndex,
-        jobId: job.id,
-        error: `Exceeded max retry (${maxRetry})`,
-      });
     }
   }
 
   private async sleep(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  private async saveSuccessLog(
-    sender: string,
-    recipient: string,
-    jobDoneKey: string,
-    now: Date,
-  ) {
-    const logData = JSON.stringify({
-      sender,
-      recipient,
-      timestamp: now.toISOString(),
-      error: '',
-      success: 'Success',
-    });
-    await this.redis.lpush(jobDoneKey, logData);
-    const ttl = await this.redis.ttl(jobDoneKey);
-    if (ttl < 0) {
-      await this.redis.expire(jobDoneKey, 864000); // 10 days
-    }
   }
 }

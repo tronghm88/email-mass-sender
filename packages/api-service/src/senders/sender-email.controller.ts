@@ -23,13 +23,13 @@ export class SenderEmailController {
   async verifyEmail(@Body('token') token: string) {
     // Exchange code for tokens
     const { tokens, email } = await this.googleService.verifyGoogleToken(token);
-
+    console.log(tokens);
     // Save to database
     await this.senderEmailService.create({
       email,
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
-      expiresAt: new Date(Date.now() + tokens.expiry_date * 1000),
+      expiresAt: new Date(tokens.expiry_date),
     });
 
     return {

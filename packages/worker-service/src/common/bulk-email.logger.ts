@@ -27,22 +27,31 @@ export class BulkEmailLogger {
     });
   }
 
-  logSuccess({ sender, recipient, batchIndex, jobId, refreshed = false }) {
+  logSuccess({
+    sender,
+    recipient,
+    subject,
+    batchIndex,
+    jobId,
+    refreshed = false,
+  }) {
     this.logger.info({
       type: 'success',
       sender,
       recipient,
+      subject,
       batchIndex,
       jobId,
       refreshed,
     });
   }
 
-  logFail({ sender, recipient, batchIndex, jobId, error }) {
+  logFail({ sender, recipient, subject, batchIndex, jobId, error }) {
     this.logger.error({
       type: 'fail',
       sender,
       recipient,
+      subject,
       batchIndex,
       jobId,
       error: error?.message || error,
