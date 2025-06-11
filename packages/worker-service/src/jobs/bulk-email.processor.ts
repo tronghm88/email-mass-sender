@@ -69,7 +69,7 @@ export class BulkEmailProcessor extends WorkerHost {
           jobId: job.id,
         });
         sent = true;
-        await this.sleep(2000);
+        await this.sleep(1000);
       } catch (err) {
         // Nếu lỗi do token hết hạn, thử refresh 1 lần
         if (!sent && this.bulkEmailService.isTokenExpiredError(err)) {

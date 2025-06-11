@@ -43,7 +43,27 @@ export class BulkEmailService {
     });
 
     return client;
-}
+  }
+
+  // getOrCreateOAuth2Client(
+  //   senderEmail: string,
+  //   refreshToken: string,
+  //   accessToken: string,
+  //   accessTokenExpiryDate: number,
+  // ): OAuth2Client {
+  //   const client = new OAuth2Client(
+  //     this.configService.get<string>('google.clientId'),
+  //     this.configService.get<string>('google.clientSecret'),
+  //   );
+
+  //   // LUÔN LUÔN thiết lập credentials với access_token, refresh_token VÀ expiry_date
+  //   // Thư viện sẽ tự động làm mới access_token nếu nó hết hạn
+  //   client.setCredentials({
+  //     refresh_token: refreshToken,
+  //   });
+
+  //   return client;
+  // }
 
   async sendMailViaGmailAPI({
     senderEmail,
@@ -83,6 +103,8 @@ export class BulkEmailService {
         raw: rawMessage,
       },
     });
+
+    console.log(result);
 
     return result;
   }

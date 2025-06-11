@@ -5,6 +5,7 @@ import { RedisProvider } from '../redis.provider';
 import { BulkEmailBatchService } from './bulk-email-batch.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BulkEmailBatch } from './bulk-email-batch.entity';
+import { EmailLog } from './email-log.entity';
 
 @Module({
   imports: [
@@ -16,7 +17,7 @@ import { BulkEmailBatch } from './bulk-email-batch.entity';
         password: process.env.REDIS_PASSWORD || undefined,
       },
     }),
-    TypeOrmModule.forFeature([BulkEmailBatch]),
+    TypeOrmModule.forFeature([BulkEmailBatch, EmailLog]),
   ],
   controllers: [BulkEmailController],
   providers: [RedisProvider, BulkEmailBatchService],

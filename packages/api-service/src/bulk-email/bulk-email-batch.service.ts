@@ -10,7 +10,12 @@ export class BulkEmailBatchService {
     private readonly batchRepo: Repository<BulkEmailBatch>,
   ) {}
 
-  async createBatch({ sender_email, count, batchIndex, datetime }: {
+  async createBatch({
+    sender_email,
+    count,
+    batchIndex,
+    datetime,
+  }: {
     sender_email: string;
     count: number;
     batchIndex: number;

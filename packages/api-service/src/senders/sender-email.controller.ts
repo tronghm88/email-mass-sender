@@ -11,12 +11,15 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GoogleService } from './google.service';
 import { SenderEmailService } from './sender-email.service';
+import { SendTestMailService } from './send-test-mail.service';
+import { SendTestMailDto } from './send-test-mail.dto';
 
 @Controller('sender-email')
 export class SenderEmailController {
   constructor(
     private readonly googleService: GoogleService,
     private readonly senderEmailService: SenderEmailService,
+    private readonly sendTestMailService: SendTestMailService,
   ) {}
 
   @Post('verify')
@@ -49,5 +52,10 @@ export class SenderEmailController {
   async deleteEmail(@Param('email') email: string) {
     await this.senderEmailService.deleteByEmail(email);
     return { message: 'Deleted' };
+  }
+
+  @Post('send-test')
+  async sendTestMail(@Body() dto: SendTestMailDto) {
+    return this.sendTestMailService.sendTestMail(dto);
   }
 }

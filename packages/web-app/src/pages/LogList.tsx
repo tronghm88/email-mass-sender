@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
+import Pagination from '@mui/material/Pagination';
 import {
   MenuItem,
   Select,
@@ -21,7 +22,7 @@ import dayjs from 'dayjs';
 const getRecentDays = (n = 10) => {
   const days = [];
   for (let i = 0; i < n; i++) {
-    days.push(dayjs().subtract(i, 'day').format('YYYYMMDD'));
+    days.push(dayjs().subtract(i, 'day').format('YYYY-MM-DD'));
   }
   return days;
 };
@@ -34,17 +35,13 @@ export default function LogList() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
   const [jobCount, setJobCount] = useState(0);
-  const loader = useRef(null);
-  // --- fix closure bug ---
-  const selectedDateRef = useRef(selectedDate);
-  const pageRef = useRef(page);
-  useEffect(() => { selectedDateRef.current = selectedDate; }, [selectedDate]);
-  useEffect(() => { pageRef.current = page; }, [page]);
+  const [pageSize, setPageSize] = useState(100);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const today = dayjs().format('YYYY-MM-DD');
 
   // Fetch logs and job count in one call
-  const fetchLogs = async (date: string, pageNum: number, append = false) => {
+  const fetchLogs = async (date: string, pageNum: number) => {
     setLoading(true);
     try {
       const res = await axios.get(`${API_BASE_URL}/bulk-email/logs`, {
@@ -52,62 +49,43 @@ export default function LogList() {
       });
       const data = res.data;
       setJobCount(data.jobCount || 0);
-      setTotal(data.doneCount || 0);
-      setHasMore((pageNum * 100) < (data.doneCount || 0));
-      setLogs((prev) => (append ? [...prev, ...data.logs] : data.logs));
+      setTotal(data.total || 0);
+      setLogs(data.logs || []);
+      setPageSize(data.pageSize || 100);
     } catch (e) {
       setLogs([]);
       setTotal(0);
       setJobCount(0);
-      setHasMore(false);
     }
     setLoading(false);
   };
 
-  // Long polling for today
+  // Long polling cho ngày hiện tại (5 phút)
   useEffect(() => {
-    const today = dayjs().format('YYYYMMDD');
-    let polling: NodeJS.Timeout | null = null;
     setPage(1);
-    fetchLogs(selectedDate, 1, false);
+    fetchLogs(selectedDate, 1);
+    if (pollingRef.current) clearInterval(pollingRef.current);
     if (selectedDate === today) {
-      polling = setInterval(() => {
+      pollingRef.current = setInterval(() => {
         setPage(1);
-        fetchLogs(selectedDate, 1, false);
-        // Reset scroll to top
+        fetchLogs(selectedDate, 1);
         window.scrollTo({ top: 0, behavior: 'auto' });
-      }, 5000);
+      }, 5 * 60 * 1000); // 5 phút
     }
     return () => {
-      if (polling) clearInterval(polling);
+      if (pollingRef.current) clearInterval(pollingRef.current);
     };
     // eslint-disable-next-line
   }, [selectedDate]);
 
-  // Infinite scroll
-  // Infinite scroll only if NOT today
+  // Khi đổi trang (pagination)
   useEffect(() => {
-    if (!hasMore) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && !loading && hasMore) {
-          // Always use latest selectedDate and page
-          const date = selectedDateRef.current;
-          const nextPage = pageRef.current + 1;
-          fetchLogs(date, nextPage, true);
-          setPage((p) => p + 1);
-        }
-      },
-      { threshold: 1.0 }
-    );
-    if (loader.current) observer.observe(loader.current);
-    return () => {
-      if (loader.current) observer.unobserve(loader.current);
-    };
+    fetchLogs(selectedDate, page);
     // eslint-disable-next-line
-  }, [loader, hasMore, loading]);
+  }, [page, selectedDate]);
 
   const days = getRecentDays(10);
+  const totalPages = Math.ceil((total || 0) / pageSize);
 
   return (
     <Box sx={{ p: 2 }}>
@@ -127,43 +105,47 @@ export default function LogList() {
         >
           {days.map((day) => (
             <MenuItem key={day} value={day}>
-              {dayjs(day, 'YYYYMMDD').format('DD/MM/YYYY')}
+              {dayjs(day, 'YYYY-MM-DD').format('DD/MM/YYYY')}
             </MenuItem>
           ))}
         </Select>
       </FormControl>
       <Box sx={{ mb: 2 }}>
         <Typography variant="body2" color="warning.main">
-          Cuộn xuống để load thêm log.
-          Đối với ngày hiện tại, trang sẽ tự động tải lại dữ liệu mỗi 5 giây (và cuộn về đầu trang),
-          dù bạn đang cuộn xuống để xem thêm, dữ liệu sẽ được làm mới lại sau mỗi lần tải lại.
+          Dữ liệu sẽ tự động tải lại mỗi 5 phút nếu bạn đang xem ngày hôm nay.<br/>
+          Bạn có thể chuyển trang để xem thêm log các trang trước đó.
         </Typography>
       </Box>
       <Typography variant="subtitle1" sx={{ mb: 2 }}>
-        Số job thành công: {total} / Tổng job: {jobCount}
+        Tổng job: {total}
       </Typography>
       <TableContainer component={Paper}>
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell>Receiver Email</TableCell>
-              <TableCell>Sender Email</TableCell>
+              <TableCell>Địa chỉ gửi</TableCell>
+              <TableCell>Địa chỉ nhận</TableCell>
+              <TableCell>Tiêu đề</TableCell>
               <TableCell>Thời gian gửi</TableCell>
+              <TableCell>Trạng thái</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {logs.map((log: any, idx: number) => (
               <TableRow key={idx}>
-                <TableCell>{log.recipient}</TableCell>
                 <TableCell>{log.sender}</TableCell>
+                <TableCell>{log.recipient}</TableCell>
+                <TableCell>{log.subject}</TableCell>
                 <TableCell>
                   {dayjs(log.timestamp).format('DD/MM/YYYY HH:mm:ss')}
-                  {log.success && (
+                </TableCell>
+                <TableCell>
+                  {log.status === 'success' && (
                     <Typography variant="body2" color="success" sx={{ mt: 0.5 }}>
-                      {log.success}
+                      {log.status}
                     </Typography>
                   )}
-                  {log.error && (
+                  {log.status === 'fail' && (
                     <Typography variant="body2" color="error" sx={{ mt: 0.5 }}>
                       {log.error}
                     </Typography>
@@ -174,8 +156,18 @@ export default function LogList() {
           </TableBody>
         </Table>
         {loading && <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}><CircularProgress /></Box>}
-        <div ref={loader} />
       </TableContainer>
+      <Box display="flex" justifyContent="center" alignItems="center" mt={2}>
+        <Pagination
+          count={totalPages}
+          page={page}
+          onChange={(_, value) => setPage(value)}
+          color="primary"
+          shape="rounded"
+          showFirstButton
+          showLastButton
+        />
+      </Box>
     </Box>
   );
 }

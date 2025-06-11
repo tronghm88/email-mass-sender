@@ -10,11 +10,13 @@ import {
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { BulkEmailDto } from './bulk-email.dto';
-
 import { BulkEmailBatchService } from './bulk-email-batch.service';
-
 import { Inject } from '@nestjs/common';
 import { Redis } from 'ioredis';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, MoreThanOrEqual } from 'typeorm';
+import { EmailLog } from './email-log.entity';
+import { BulkEmailBatch } from './bulk-email-batch.entity';
 
 @Controller('bulk-email')
 export class BulkEmailController {
@@ -22,8 +24,11 @@ export class BulkEmailController {
     @InjectQueue('bulkEmail') private readonly bulkEmailQueue: Queue,
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
     private readonly bulkEmailBatchService: BulkEmailBatchService,
+    @InjectRepository(EmailLog)
+    private readonly emailLogRepo: Repository<EmailLog>,
+    @InjectRepository(BulkEmailBatch)
+    private readonly batchRepo: Repository<BulkEmailBatch>,
   ) {}
-
 
   @Post('send')
   // @UseGuards(JwtAuthGuard)
@@ -85,36 +90,60 @@ export class BulkEmailController {
     };
   }
 
+  @Get('progress')
+  async getMailProgress() {
+    // Lấy mốc 00:00 hôm nay
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Lấy các batch từ hôm nay trở đi
+    const batches = await this.batchRepo.find({
+      where: { datetime: MoreThanOrEqual(today) },
+      order: { datetime: 'ASC' },
+    });
+    const totalJobs = batches.reduce((sum, b) => sum + b.count, 0);
+
+    // Lấy các email log từ hôm nay trở đi
+    const [sentJobs, successJobs, failJobs] = await Promise.all([
+      this.emailLogRepo.count({ where: { timestamp: MoreThanOrEqual(today) } }),
+      this.emailLogRepo.count({
+        where: { timestamp: MoreThanOrEqual(today), status: 'success' },
+      }),
+      this.emailLogRepo.count({
+        where: { timestamp: MoreThanOrEqual(today), status: 'fail' },
+      }),
+    ]);
+
+    return {
+      totalJobs,
+      sentJobs,
+      successJobs,
+      failJobs,
+      batches,
+    };
+  }
+
   @Get('logs')
   async getJobLogs(@Query('date') date: string, @Query('page') page = 1) {
-    // date: 'yyyymmdd', page: number (default 1)
+    // date: 'yyyy-mm-dd', page: number (default 1)
     page = Number(page) || 1;
-    if (!date || !/^\d{8}$/.test(date)) {
-      throw new BadRequestException('Invalid or missing date (format: yyyymmdd)');
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new BadRequestException(
+        'Invalid or missing date (format: yyyy-mm-dd)',
+      );
     }
-    const key = `job_done:${date}`;
-    const jobCountKey = `job_count:${date}`;
     const pageSize = 100;
     const start = (page - 1) * pageSize;
-    const end = start + pageSize - 1;
-    const doneCount = await this.redis.llen(key);
-    // Lấy tổng số job đã tạo trong ngày
-    const jobCountValue = await this.redis.get(jobCountKey);
-    const jobCount = jobCountValue ? Number(jobCountValue) : 0;
-
-    const items = await this.redis.lrange(key, start, end);
-
-    // Parse each item (JSON string)
-    const logs = items.map((item: string) => {
-      try {
-        return JSON.parse(item);
-      } catch {
-        return item;
-      }
-    });
+    // So sánh chính xác ngày (timestamp = date)
+    // Sử dụng truy vấn cho Postgres: DATE(timestamp) = :date
+    // QueryBuilder để filter theo ngày và phân trang, sort DESC
+    const qb = this.emailLogRepo
+      .createQueryBuilder('log')
+      .where('DATE(log.timestamp) = :date', { date })
+      .orderBy('log.timestamp', 'DESC');
+    const [logs, total] = await qb.skip(start).take(pageSize).getManyAndCount();
     return {
-      doneCount, // số job thành công (done)
-      jobCount, // tổng số job tạo trong ngày
+      total,
       page,
       pageSize,
       logs,

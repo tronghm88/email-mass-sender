@@ -9,6 +9,8 @@ import Login from './Login';
 import { Route } from 'react-router-dom';
 import { MyLayout } from './MyLayout';
 import LogList from './pages/LogList';
+import SendTestMail from './pages/SendTestMail';
+import ProgressMail from './pages/ProgressMail';
 
 function App() {
 
@@ -41,6 +43,22 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={['admin', 'user']}>
                     <BulkEmail />
+                  </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/send-test-mail"
+                element={
+                  <ProtectedRoute allowedRoles={['admin', 'user']}>
+                    <SendTestMail />
+                  </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/progress-mail"
+                element={
+                  <ProtectedRoute allowedRoles={['admin', 'user']}>
+                    <ProgressMail />
                   </ProtectedRoute>
                 }
             />
