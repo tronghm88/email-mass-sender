@@ -45,15 +45,15 @@ export class BulkEmailProcessor extends WorkerHost {
     for (const email of recipients) {
       let sent = false;
       try {
-        await this.bulkEmailService.sendMailViaGmailAPI({
-          refreshToken,
-          accessToken,
-          senderEmail: sender,
-          recipient: email,
-          subject,
-          body,
-          accessTokenExpiryDate,
-        });
+        // await this.bulkEmailService.sendMailViaGmailAPI({
+        //   refreshToken,
+        //   accessToken,
+        //   senderEmail: sender,
+        //   recipient: email,
+        //   subject,
+        //   body,
+        //   accessTokenExpiryDate,
+        // });
 
         await this.emailLogService.logSuccess({
           sender,
